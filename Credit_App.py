@@ -215,7 +215,7 @@ print("Training completed. let's predict the test set now", )
 #input()
 
 predict_y = lm.predict(x_test)
-predict_y_prob = lm.predict_proba(x_test)
+predict_y_prob = lm.decision_function(x_test)
 
 print("Prediction completed on test set. let's check the accuracy", )
 print("Accuracy test set",accuracy_score(y_test, predict_y) )
