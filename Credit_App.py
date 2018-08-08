@@ -1,3 +1,6 @@
+from sklearn.model_selection import GridSearchCV
+import lightgbm
+import credit_dep as cd
 import matplotlib as plt
 import pandas as pd
 import numpy as np
@@ -7,254 +10,270 @@ from sklearn import neighbors
 from sklearn import preprocessing
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.naive_bayes import GaussianNB
 import sklearn as sk
 
 # Change the max columns limit to 1000 for display in console
 pd.set_option('max_columns', 1000)
 
+PREV_APP_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\previous_application\\previous_application.csv"
+TRAIN_META_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\application_train\\application_train_meta.csv"
+TEST_META_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\application_train\\application_test_meta.csv"
 TRAIN_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\application_train\\application_train.csv"
 TEST_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\application_test\\application_test.csv"
-BUREAU_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\bureau\\bureau_samplebig.csv"
+#BUREAU_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\bureau\\bureau_samplebig.csv"
 OUTPUT_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\test_y.csv"
-BUREAU_BALANCE_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\bureau_balance\\bureau_balance_samplebig.csv"
+#BUREAU_BALANCE_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\bureau_balance\\bureau_balance_samplebig.csv"
 
-def read_file(TRAIN_FILENAME):
-    train_df = pd.read_csv(TRAIN_FILENAME)
-    print(train_df.shape)
-    return train_df
+# Step 1 - Read the files
+test_df = cd.read_file(TEST_FILENAME)
+train_df = cd.read_file(TRAIN_FILENAME)
+output = test_df["SK_ID_CURR"]
 
-
-def cleanse(data_df):
-    #print(test_df["CODE_GENDER"].unique())
-    #data_df = test_df
-    data_df.loc[data_df.CODE_GENDER == 'M', 'CODE_GENDER'] = 1
-    print("Code Gender 1 Done")
-    data_df.loc[data_df.CODE_GENDER == 'F', 'CODE_GENDER'] = 0
-    print("Code Gender 0 Done")
-    # data_df.loc[data_df.CODE_GENDER == 'XNA', 'CODE_GENDER'] = np.nan
-    #data_df["CODE_GENDER"].
-    print(data_df.shape)
-    data_df["CODE_GENDER"] = data_df["CODE_GENDER"].astype(int)
-    print("Type Conversion Done")
-
-    data_df.loc[data_df.FLAG_OWN_CAR == 'Y', 'FLAG_OWN_CAR'] = 1
-    data_df.loc[data_df.FLAG_OWN_CAR == 'N', 'FLAG_OWN_CAR'] = 0
-    data_df["FLAG_OWN_CAR"] = data_df["FLAG_OWN_CAR"].astype(int)
-    print(data_df["FLAG_OWN_CAR"].isnull().sum())
-
-    data_df.loc[data_df.FLAG_OWN_REALTY == 'Y', 'FLAG_OWN_REALTY'] = 1
-    data_df.loc[data_df.FLAG_OWN_REALTY == 'N', 'FLAG_OWN_REALTY'] = 0
-    data_df["FLAG_OWN_REALTY"] = data_df["FLAG_OWN_REALTY"].astype(int)
-    print(data_df["FLAG_OWN_REALTY"].isnull().sum())
-
-    # data_df.groupby(by="EMERGENCYSTATE_MODE", axis=0).count()
-    data_df.loc[data_df["EMERGENCYSTATE_MODE"].isna(), "EMERGENCYSTATE_MODE"] = 'N'
-    data_df.loc[data_df.EMERGENCYSTATE_MODE == 'Yes', 'EMERGENCYSTATE_MODE'] = 1
-    data_df.loc[data_df.EMERGENCYSTATE_MODE == 'No', 'EMERGENCYSTATE_MODE'] = 0
-    data_df.loc[data_df.EMERGENCYSTATE_MODE == 'Y', 'EMERGENCYSTATE_MODE'] = 1
-    data_df.loc[data_df.EMERGENCYSTATE_MODE == 'N', 'EMERGENCYSTATE_MODE'] = 0
-
-    data_df["EMERGENCYSTATE_MODE"] = data_df["EMERGENCYSTATE_MODE"].astype(int)
-
-    data_df[data_df.select_dtypes(include=[np.object]).columns.values] = data_df[
-        data_df.select_dtypes(include=[np.object]).columns.values].fillna("Others")
-
-    data_df.pop("WEEKDAY_APPR_PROCESS_START")
-
-    data_df[data_df.select_dtypes(include=[np.float64]).columns.values] = data_df[
-        data_df.select_dtypes(include=[np.float64]).columns.values].fillna(0)
-    print(data_df[data_df.select_dtypes(include=[np.float64]).columns.values].isna().sum())
-
-    data_df[data_df.select_dtypes(include=[np.float]).columns.values] = data_df[
-        data_df.select_dtypes(include=[np.float]).columns.values].fillna(0)
-    print(data_df[data_df.select_dtypes(include=[np.float]).columns.values].isna().sum())
-
-    data_df[data_df.select_dtypes(include=[np.int64]).columns.values] = data_df[
-        data_df.select_dtypes(include=[np.int64]).columns.values].fillna(0)
-    print(data_df[data_df.select_dtypes(include=[np.int64]).columns.values].isna().sum())
-
-    data_df.pop("SK_ID_CURR")
-    return data_df
-
-def repl_catg_columns(tr_df, te_df):
-    tr_data_types = tr_df.dtypes
-    #te_data_types = te_df.dtypes
-    #print(type(tr_data_types))
-    #if (tr_data_types == te_data_types):
-     #   print("Data Types Match")
-    #else:
-      #  raise (Exception)
-    tr_concat_df = pd.DataFrame(tr_df)
-    te_concat_df = pd.DataFrame(te_df)
-    # print(concat_df)
-    counter_list = []
-    for counter, col in enumerate(tr_data_types, 0):
-        print(col, " ", counter)
-        if col == "object":
-            #if [tr_df.iloc[:,counter].unique()] != [te_df.iloc[:,counter].unique()]:
-            #    print("Object data type identified ", tr_concat_df.columns[counter],  " at column ", counter)
-
-            # dummy_df = pd.get_dummies(df[cols[counter]])
-            # dummy_df = pd.get_dummies((df.iloc[:,2]))
-            # print(dummy_df)
-            tr_dummy_df = pd.get_dummies(tr_df.iloc[:, counter])
-            te_dummy_df = pd.get_dummies(te_df.iloc[:, counter])
-            #print(tr_dummy_df.shape)
-            #print(te_dummy_df.shape)
-            # print(dummy_df)
-            # concat_df.pop(df[cols[counter]])#, inplace = True)
-            counter_list.append(counter)
-            # concat_df = concat_df.drop(concat_df.columns[counter], axis = 1)
-
-            # concat_df = concat_df.pop(df.iloc[:,counter])  # , inplace = True)
-            # concat_df.drop(cols[counter])
-            tr_concat_df = pd.concat((tr_concat_df, tr_dummy_df), axis=1)
-            te_concat_df = pd.concat((te_concat_df, te_dummy_df), axis=1)
-
-            # print(concat_df.shape)
-    tr_concat_df = tr_concat_df.drop(tr_concat_df.columns[counter_list], axis=1)
-    te_concat_df = te_concat_df.drop(te_concat_df.columns[counter_list], axis=1)
-
-    return tr_concat_df, te_concat_df
-
-
-test_df = read_file(TEST_FILENAME)
-train_df = read_file(TRAIN_FILENAME)
+print("Training Set Size", train_df.shape)
+print("Test_Set Size", test_df.shape)
 
 train_df = train_df[train_df["CODE_GENDER"] != "XNA"]
-print(train_df.shape)
+train_df = train_df[train_df["NAME_INCOME_TYPE"]!="Maternity leave"]
+
+train_df = train_df[train_df["NAME_FAMILY_STATUS"]!="Unknown"]
+
+print("Training Set Size", train_df.shape)
+
 #print(train_df.iloc[:,1].unique())
+#print(train_df.select_dtypes(include=[np.float64]).columns.values)
+
+# Step 2 - clean the data frames i.e. clean NA values, covert the object data type to Numeric
+num_train_null_cols = cd.assess(train_df, write_to_file = False )
+print(num_train_null_cols, " columns have null values out of total train set", train_df.shape[1],". Cleaning them.....press any key to continue")
+train_df = cd.cleanse(train_df)
+print("Training Set Size", train_df.shape)
 
 
-cl_test_df = cleanse(test_df)
-cl_train_df = cleanse(train_df)
+num_test_null_cols = cd.assess(test_df, write_to_file = False, FILE_NAME=TEST_META_FILENAME )
+print(num_test_null_cols, " columns have null values out of total test set", test_df.shape[1],". Cleaning them.....press any key to continue")
+test_df = cd.cleanse(test_df)
+print("Test_Set Size", test_df.shape)
 
-print(cl_train_df.shape)
-print(cl_test_df.shape)
+train_df, test_df = cd.clean_NA(train_df, test_df)
 
-print(cl_train_df["NAME_FAMILY_STATUS"].unique())
+print(train_df.shape)
+print(test_df.shape)
+print(train_df.isna().sum().sum())
+print(test_df.isna().sum().sum())
 
-cl_train_df = cl_train_df[cl_train_df["NAME_INCOME_TYPE"]!="Maternity leave"]
-print(cl_train_df.shape)
+# Step 3 - Label encode the category columns. You can also use the hot encoding using function rep_cat_columns
+# alternate method - train_df, test_df = cd.repl_catg_columns(train_df, test_df)
+train_df = cd.label_encode(train_df)
+test_df = cd.label_encode(test_df)
 
-cl_train_df = cl_train_df[cl_train_df["NAME_FAMILY_STATUS"]!="Unknown"]
-print(cl_train_df.shape)
+#train_df = cd.binary_encoding(train_df)
+#input()
+
+print(train_df.shape)
+print(test_df.shape)
 
 
-y_train = cl_train_df["TARGET"]
-print(y_train.shape)
+# Step 4 - combine with data the bureau tables and bureal balance table
+x = cd.get_cleaned_bureau_data()
 
-cl_train_df.pop("TARGET")
-print(cl_train_df.shape)
-print(cl_test_df.shape)
+train_df = train_df.merge(x, how='left', left_on='SK_ID_CURR', right_on='SK_ID_CURR')
+print("Training Set Shape after merging with Bureau", train_df.shape)
 
-cat_train_df, cat_test_df = repl_catg_columns(cl_train_df, cl_test_df)
+print("Test Set Shape before merging with Bureau", test_df.shape)
+test_df = test_df.merge(x, how='left', left_on='SK_ID_CURR', right_on='SK_ID_CURR')
+print("Test Set Shape after merging with Bureau", test_df.shape)
 
-print(cat_train_df.shape)
-#cat_val_df = repl_catg_columns(cl_test_df)
-print(cat_test_df.shape)
+print(train_df.shape)
+train_df = train_df.fillna(0)
+#train_df.pop("TARGET")
+print(train_df.isna().sum().sum())
 
-#x = cat_train_df.corr()
-#print(x.shape)
-#print(type(x))
 
-#print(x.iloc[:2,2])
-"""
+print(test_df.isna().sum().sum())
+test_df = test_df.fillna(0)
+print(train_df.shape)
+print(test_df.shape)
+print(test_df.columns)
+
+# Step 5: Join with Previous Applications Balances DAta
+print(train_df.shape)
+#print(dtrain_df.columns[:5])
+
+agg_pa_df =  cd.get_prev_app_data()
+
+ctrain_df = train_df.merge(agg_pa_df, how='left', left_on='SK_ID_CURR', right_on='SK_ID_CURR')
+print("Training Set Shape after merging with Bureau", ctrain_df.shape)
+print(ctrain_df.isna().sum().sum())
+train_df = ctrain_df.fillna(0)
+print(train_df.isna().sum().sum())
+
+test_df = test_df.merge(agg_pa_df, how='left', left_on='SK_ID_CURR', right_on='SK_ID_CURR')
+print("Test Set Shape after merging with Bureau", test_df.shape)
+print(test_df.isna().sum().sum())
+test_df = test_df.fillna(0)
+print(test_df.isna().sum().sum())
+
+data_df =  cd.get_prev_bal_data()
+print(data_df.head())
+print(train_df.shape)
+train_df = train_df.merge(data_df, how='left', left_on='SK_ID_CURR', right_on='SK_ID_CURR')
+print("Training Set Shape after merging with Bureau", train_df.shape)
+print(train_df.isna().sum())
+train_df = train_df.fillna(0)
+print(train_df.shape)
+test_df = test_df.merge(data_df, how='left', left_on='SK_ID_CURR', right_on='SK_ID_CURR')
+print("Test Set Shape after merging with Bureau", test_df.shape)
+print(test_df.isna().sum().sum())
+test_df = test_df.fillna(0)
+
+
+cc_bal_df = cd.get_cred_file_data()
+
+train_df = train_df.merge(cc_bal_df, how='left', left_on='SK_ID_CURR', right_on='SK_ID_CURR')
+print("Training Set Shape after merging with Cred Bal", train_df.shape)
+print(train_df.isna().sum().sum())
+train_df = train_df.fillna(0)
+print(train_df.shape)
+test_df = test_df.merge(cc_bal_df, how='left', left_on='SK_ID_CURR', right_on='SK_ID_CURR')
+print("Test Set Shape after merging with Cred Bal", test_df.shape)
+print(test_df.isna().sum().sum())
+test_df = test_df.fillna(0)
+
+in_pay_df = cd.get_install_payments_data()
+
+train_df = train_df.merge(in_pay_df, how='left', left_on='SK_ID_CURR', right_on='SK_ID_CURR')
+print("Training Set Shape after merging with install payments", train_df.shape)
+print(train_df.isna().sum().sum())
+train_df = train_df.fillna(0)
+print(train_df.shape)
+
+test_df = test_df.merge(in_pay_df, how='left', left_on='SK_ID_CURR', right_on='SK_ID_CURR')
+print("Test Set Shape after merging with Install Payments", test_df.shape)
+print(test_df.isna().sum().sum())
+test_df = test_df.fillna(0)
+
+
+
+#train_df, test_df = cd.corr_extract(train_df,test_df)
+
+
+ctrain_df = train_df.drop("SK_ID_CURR", axis = 1)
+ctest_df = test_df.drop("SK_ID_CURR", axis = 1)
+print(train_df.shape)
+print(ctrain_df.shape)
+print(test_df.shape)
+print(ctest_df.shape)
+#train_df.pop("SK_ID_CURR")
+#test_df.pop("SK_ID_CURR")
+
+#Step 6. Idenfify the cols that are not coorelated using pearson coeff. Remove non required colsCorrelation Data
+#dtrain_df, dtest_df=  cd.corr_extract(train_df.iloc[:,1:], test_df.iloc[:,1:])
+#dtrain_df, dteste_df = cd.corr
+#print(cor_train.shape)
+
+
+
+y_total_train = ctrain_df["TARGET"]
+ctrain_df.pop("TARGET")
+print(y_total_train.shape)
+
+#from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+scaler = MinMaxScaler().fit(ctrain_df)
+#scaler = StandardScaler().fit(ctrain_df)
+
+pre_train = scaler.transform(ctrain_df)
+pre_test = scaler.transform(ctest_df)
+
+
 #print(cat_train_df.shape)
 #print(cat_train_df.select_dtypes(include=[np.object]).columns.values)
-
-# Correlation Data
-x = cat_train_df.orr
-print(type(x))
-print(x.shape)
-"""
-
-from sklearn.preprocessing import MinMaxScaler
-scaler = MinMaxScaler()
-pre_train = scaler.fit_transform(cat_train_df)
-pre_test = scaler.transform(cat_test_df)
 
 #pre_train = preprocessing.normalize(cat_train_df)
 #pre_test = preprocessing.normalize(cat_test_df)
 #print(pre_test.shape)
 
-
-#print(pre_test[1:5,6])
-
-#cor_train = pre_train.corr()
-#print(cor_train.shape)
-
 # Split Data
+x_train, x_test, y_train, y_test = train_test_split(pre_train, y_total_train, test_size=0.3, random_state=0)
 
-x_train, x_test, y_train, y_test = train_test_split(pre_train, y_train, test_size=0.3)
+
+
 #poly = PolynomialFeatures(degree = 2)
 #x_poly = poly.fit_transform(x_train)
 #print(x_poly.shape)
 
-lm = sk.linear_model.LogisticRegression(C = 5, penalty='l2', solver = 'saga', max_iter = 250)
+#lm = sk.linear_model.LogisticRegression(C = 5, penalty='l2', solver = 'saga', max_iter = 450)
+
+#lm = GaussianNB()
+#import xgboost
+#from xgboost import XGBClassifier
+#lm = XGBClassifier()
+
+parameters = {'n_estimators':[75,100,125,150,200], 'learning_rate':[0.01, 0.1,0.5, 1, 5], 'max_depth':[2,4,6,8], 'max_features':[0.2,0.4,0.6,0.8]}
+lm1 = GradientBoostingClassifier()#n_estimators=100, learning_rate=0.1, max_depth=4, max_features=0.2)
+lm = GridSearchCV(lm1, param_grid=parameters, scoring='roc_auc')
+#lm = sk.ensemble.RandomForestClassifier(n_estimators=20, max_features=0.5)
+#lm = sk.neural_network.MLPClassifier(hidden_layer_sizes=(200,200, 200), alpha=0.01, activation='relu')
 #lm = sk.tree.DecisionTreeClassifier(max_depth=30)
 #lm = sk.svm.SVC(C=5.0, kernel='rbf')
-print(lm)
+#print(lm)
 
 #lm = sk.neighbors.KNeighborsClassifier(n_neighbors=11)
 from sklearn.multiclass import OneVsRestClassifier
 from sklearn import svm
 import random
 from sklearn.metrics import roc_curve, auc
-from sklearn import neural_network
-#lm = neural_network.MLPClassifier(hidden_layer_sizes=64)
+#from sklearn import neural_network
+#lm = neural_network.MLPClassifier(hidden_layer_sizes={100,100,100}, alpha=0.01,  activation='relu')
 
 #random_state = np.random.RandomState(0)
 #lm =  OneVsRestClassifier(svm.SVC(kernel='linear', probability=True,random_state=random_state))
 
 print("Training the model now")
 lm.fit(x_train, y_train)
+#x_train_dataset = lightgbm.Dataset(x_train, label = y_train)
+#x_test_dataset =  lightgbm.Dataset(x_test, label = y_test)
+#parameters = {   'application': 'binary', 'objective': 'binary', 'metric': 'auc', 'is_unbalance': 'true', 'boosting': 'gbdt', 'num_leaves': 200, 'feature_fraction': 0.5,
+#    'bagging_fraction': 0.5, 'bagging_freq': 20, 'learning_rate': 0.5, 'verbose': 0 } #'num_leaves': 31
+
+#lm = lightgbm.train(parameters, x_train_dataset, num_boost_round=5000, early_stopping_rounds=1000, valid_sets= x_test_dataset)
+
 print("Training completed. let's predict the test set now", )
 
-#print(lm)
-#input()
+print(lm.best_params_)
+print("Best Score")
+print(lm.best_score_)
 
 predict_y = lm.predict(x_test)
-predict_y_prob = lm.decision_function(x_test)
-
+#predict_y_prob = lm.decision_function(x_test)
+predict_y_prob = lm.predict_log_proba(x_test)
 print("Prediction completed on test set. let's check the accuracy", )
-print("Accuracy test set",accuracy_score(y_test, predict_y) )
-
 print("Confusion Metrics - Test Set", sk.metrics.confusion_matrix(y_test,predict_y))
 print("F1 Score - Test Set", sk.metrics.f1_score(y_test, predict_y) )
+print("ROC Score - Test Set ", sk.metrics.roc_auc_score(y_test, predict_y_prob[:,1]))
 
-print("ROC Score - Test Set ", sk.metrics.roc_auc_score(y_test, predict_y))
 
-
+print("Let's check the accuracy for training set:", )
 predict_train_y = lm.predict(x_train)
-print("Prediction completed for train set. let's check the accuracy", )
-print("Accuracy on training set",accuracy_score(y_train, predict_train_y) )
-
-#print(predict_y.shape)
-#print(predict_y_prob.shape)
-
-#print(predict_y_prob[600:600][:])
-print((predict_y[0:93000]==1).sum())
-print((np.array(y_test)[0:93000]==1).sum())
-
-#print(accuracy_score(y_test, predict_y))
-#print(sk.metrics.f1_score(y_test, predict_y))
-
-#print(accuracy_score(y_train, predict_train_y))
-##print(sk.metrics.f1_score(y_train, predict_train_y))
-print("ROC - Training Set ", sk.metrics.roc_auc_score(y_train, predict_train_y))
-
-print((predict_train_y[:]==1).sum())
-print((np.array(y_train)[:]==1).sum())
-
-
+print("Confusion Metrics - Train Set", sk.metrics.confusion_matrix(y_train,predict_train_y))
+print("F1 Score Train Set", sk.metrics.f1_score(y_train, predict_train_y))
+print("ROC - Training Set ",sk.metrics.roc_auc_score(y_train, lm.predict_log_proba(x_train)[:,1]) )
+#print("ROC - Training Set ",sk.metrics.roc_auc_score(y_train, lm.decision_function(x_train)) )
 
 ## Final Validation
-predict_val_y = lm.predict(pre_test)
+#predict_val_y = lm.predict(pre_test)
+#print(test_df.iloc[0:5,0])
+#predict_val_prob = lm.decision_function(pre_test)
 predict_val_prob = lm.predict_proba(pre_test)
-output = pd.DataFrame(predict_y_prob)
-output.to_csv(OUTPUT_FILENAME)
-print(output.shape)
-print(pre_test.shape)
-print(predict_val_y.shape)
+#print(predict_val_prob.shape)
+#print(predict_val_prob[0:5])
+predict_val_prob_df = pd.Series(data = predict_val_prob[:,1])
+print(predict_val_prob_df.shape)
+#output = pd.DataFrame(predict_y_prob)
+final_output = pd.concat((output, predict_val_prob_df), axis = 1)
+print(final_output.shape)
+#final_output.to_csv(OUTPUT_FILENAME, header=['SK_ID_CURR', 'TARGET'])
+
 

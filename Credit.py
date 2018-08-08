@@ -15,8 +15,10 @@ pd.set_option('max_columns', 1000)
 
 TRAIN_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\application_train\\application_train.csv"
 TEST_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\application_test\\application_test.csv"
-BUREAU_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\bureau\\bureau_samplebig.csv"
-BUREAU_BALANCE_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\bureau_balance\\bureau_balance_samplebig.csv"
+BUREAU_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\bureau\\bureau.csv"
+BUREAU_BALANCE_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\bureau_balance\\bureau_balance.csv"
+AGG_BUREAU_BALANCE_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\bureau_balance\\bureau_balance_agg.csv"
+JOINED_BUREAU_FILENAME = "C:\\Users\\IBM_ADMIN\\Desktop\\Personal\\Trainings\\Machine Learning\\Data\\Kaggle Credit\\bureau_balance\\bureau_balance_joined.csv"
 
 def change(TRAIN_FILENAME):
     TRAIN_FILENAME = "ABC"
@@ -38,7 +40,7 @@ def read_files():
     return train_df, test_df
 
 
-"""
+
 bureau_df = pd.read_csv(BUREAU_FILENAME)
 print(bureau_df.shape)
 
@@ -53,7 +55,45 @@ print(bureau_balance_df.shape)
 
 #Summarize Bureau Balance File
 print(bureau_balance_df.head())
+
+bureau_balance_df.loc[bureau_balance_df['STATUS'] == 'C', 'STATUS'] = '0'
+bureau_balance_df.loc[bureau_balance_df['STATUS'] == 'X', 'STATUS'] = '0'
+
+bureau_balance_df['MONTHS_BALANCE'].value_counts()
+bureau_balance_df['STATUS'].value_counts()
+print(bureau_balance_df.isna().sum())
+bureau_balance_df['STATUS'] = bureau_balance_df['STATUS'].astype(int)
+print(bureau_balance_df.dtypes)
+bureau_balance_df.pop("MONTHS_BALANCE")
+agg_bb_df = bureau_balance_df.groupby("SK_ID_BUREAU").agg(np.max)
+
+agg_bb_df = agg_bb_df.reset_index()
+print(agg_bb_df.shape)
+
+agg_bb_df.to_csv(AGG_BUREAU_BALANCE_FILENAME)
+
+bb_df = bureau_df.merge(agg_bb_df, how='left', left_on = 'SK_ID_BUREAU', right_on = 'SK_ID_BUREAU')
+print(bb_df.isna().sum())
+print(bb_df.shape)
+bb_df.to_csv(JOINED_BUREAU_FILENAME)
+print(bb_df.dtypes)
+bb_df.pop("CREDIT_CURRENCY")
+bb_df.pop("SK_ID_BUREAU")
+bb_df.pop("CREDIT_ACTIVE")
+bb_df.pop("CREDIT_TYPE")
+
+
+#x = bb_df.groupby("SK_ID_CURR").agg({'DAYS_CREDIT': 'mean', 'CREDIT_DAY_OVERDUE': 'mean', 'DAYS_CREDIT_ENDDATE':'mean', 'DAYS_ENDDATE_FACT':'mean'
+ #                                    })
+x = bb_df.groupby("SK_ID_CURR").agg(np.mean)
+print(x.shape)
+print(x.isna().sum())
+x['STATUS'] = x['STATUS'].fillna(0)
+x = x.fillna(x.mean())
+
+
 #Filter on only OverDue Accounts. Rest are fine.
+
 bb_DPD_balance_df = bureau_balance_df[bureau_balance_df.STATUS.isin(('1','2','3'))]# == '1' or bureau_balance_df.STATUS =='2']# | bureau_balance_df.STATUS == '2' | bureau_balance_df.STATUS == '3'] #.groupby(by='status')
 print(bb_DPD_balance_df.head())
 bb_DPD_balance_df.pop("MONTHS_BALANCE")
